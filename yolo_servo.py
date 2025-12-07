@@ -49,6 +49,14 @@ if GPIO_AVAILABLE:
     try:
         pygame.mixer.init()
 
+        try:
+            snd_b3 = pygame.mixer.Sound(SOUND_B3)
+            snd_organic = pygame.mixer.Sound(SOUND_ORGANIC)
+            snd_non = pygame.mixer.Sound(SOUND_NON_ORGANIC)
+        except Exception as e:
+            print(f"Audio gagal dimuat: {e}")
+            snd_b3 = snd_organic = snd_non = None
+
         GPIO.setwarnings(False)
         # ensure clean start
         GPIO.cleanup()
@@ -142,7 +150,7 @@ def jalankan_servo(jenis_sampah):
 
         # === B3 ===
         if jenis_sampah == 'b3':
-            pygame.mixer.Sound(SOUND_B3)
+            snd_b3.play()
             print("=== SAMPAH B3 TERDETEKSI ===")
             print("Servo1 sudah di posisi default (B3), tidak bergerak.")
             servo2_buka_tutup()
@@ -150,7 +158,7 @@ def jalankan_servo(jenis_sampah):
 
         # === ORGANIC ===
         elif jenis_sampah == 'organic':
-            pygame.mixer.Sound(SOUND_ORGANIC)
+            snd_organic.play()
             print("=== SAMPAH ORGANIK TERDETEKSI ===")
             print("1. Memutar bin ke KANAN (organic)...")
             servo1_goto(DUTY_ORG)
@@ -164,7 +172,7 @@ def jalankan_servo(jenis_sampah):
 
         # === NON-ORGANIC ===
         elif jenis_sampah == 'non-organic':
-            pygame.mixer.Sound(SOUND_NON_ORGANIC)
+            snd_non.play()
             print("=== SAMPAH NON-ORGANIC TERDETEKSI ===")
             print("1. Memutar bin ke KIRI (non-organic)...")
             servo1_goto(DUTY_NON)
