@@ -1,13 +1,27 @@
 import time
 import atexit
-import pygame
 
 # ========== KONFIGURASI GPIO ==========
 GPIO_AVAILABLE = False
+PYGAME_AVAILABLE = False
+
+snd_b3 = None
+snd_organic = None
+snd_non = None
+snd_fail = None
+
 try:
     import RPi.GPIO as GPIO
     GPIO_AVAILABLE = True
-    # print("STATUS: RPi.GPIO berhasil dimuat.")
+    print("STATUS: RPi.GPIO berhasil dimuat.")
+
+    try:
+        import pygame
+        pygame.mixer.init()
+        PYGAME_AVAILABLE = True
+        print("STATUS: Pygame Mixer berhasil diinisialisasi.")
+    except Exception as e:
+        print(f"WARNING: Audio disabled: {e}")
 except Exception:
     # If import fails we run in simulation mode
     GPIO_AVAILABLE = False
@@ -43,6 +57,7 @@ servo_tutup = None
 SOUND_B3 = 'b3.mp3'
 SOUND_ORGANIC = 'organic.mp3'
 SOUND_NON_ORGANIC = 'non-organic.mp3'
+SOUND_FAIL = 'waste-cant-detect.mp3'
 
 # Initialize hardware if available
 if GPIO_AVAILABLE:
@@ -74,6 +89,27 @@ if GPIO_AVAILABLE:
         print(f"[WARNING] GPIO init failed, switching to simulation mode: {e}")
         GPIO_AVAILABLE = False
 
+if PYGAME_AVAILABLE:
+    try:
+        snd_b3 = pygame.mixer.Sound(SOUND_B3)
+        snd_organic = pygame.mixer.Sound(SOUND_ORGANIC)
+        snd_non = pygame.mixer.Sound(SOUND_NON_ORGANIC)
+        snd_fail = pygame.mixer.Sound(SOUND_FAIL)
+        print("STATUS: Semua file audio berhasil di-preload.")
+    except Exception as e:
+        print(f"WARNING: Gagal memuat file audio: {e}")
+        PYGAME_AVAILABLE = False
+
+
+def play_sound(sound_obj):
+    """Play sound (non-blocking, safe)."""
+    if PYGAME_AVAILABLE and sound_obj is not None:
+        try:
+            pygame.mixer.Channel(0).play(sound_obj)
+        except Exception as e:
+            print(f"ERROR play_sound(): {e}")
+    else:
+        print("[SIMULASI AUDIO] Bunyi diputar")
 
 # --------- Utility: safe pwm change ---------
 
@@ -150,7 +186,7 @@ def jalankan_servo(jenis_sampah):
 
         # === B3 ===
         if jenis_sampah == 'b3':
-            snd_b3.play()
+            play_sound(snd_b3)
             print("=== SAMPAH B3 TERDETEKSI ===")
             print("Servo1 sudah di posisi default (B3), tidak bergerak.")
             servo2_buka_tutup()
@@ -158,7 +194,7 @@ def jalankan_servo(jenis_sampah):
 
         # === ORGANIC ===
         elif jenis_sampah == 'organic':
-            snd_organic.play()
+            play_sound(snd_organic)
             print("=== SAMPAH ORGANIK TERDETEKSI ===")
             print("1. Memutar bin ke KANAN (organic)...")
             servo1_goto(DUTY_ORG)
@@ -172,7 +208,7 @@ def jalankan_servo(jenis_sampah):
 
         # === NON-ORGANIC ===
         elif jenis_sampah == 'non-organic':
-            snd_non.play()
+            play_sound(snd_non)
             print("=== SAMPAH NON-ORGANIC TERDETEKSI ===")
             print("1. Memutar bin ke KIRI (non-organic)...")
             servo1_goto(DUTY_NON)
