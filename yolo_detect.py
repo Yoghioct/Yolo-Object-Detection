@@ -141,7 +141,7 @@ fps_avg_len = 200
 img_count = 0
 
 # Register cleanup to run on exit
-atexit.register(cleanup_servo)
+# atexit.register(cleanup_servo)
 
 # Begin inference loop
 try:
@@ -279,9 +279,9 @@ finally:
         except Exception:
             pass
 
-    try:
-        cleanup_servo()
-    except Exception as e:
-        print('Cleanup servo error:', e)
+    # try:
+    #     cleanup_servo()
+    # except Exception as e:
+    #     print('Cleanup servo error:', e)
 
     cv2.destroyAllWindows()

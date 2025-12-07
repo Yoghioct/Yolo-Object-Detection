@@ -1,7 +1,3 @@
-# ==============================
-# FILE: yolo_audio.py
-# ==============================
-
 PYGAME_AVAILABLE = False
 
 snd_b3 = None
