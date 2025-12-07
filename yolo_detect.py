@@ -207,7 +207,6 @@ while True:
             # Jalankan servo untuk kategori yang valid
             if classname in ['non-organic', 'organic', 'b3']:
                 jalankan_servo(classname)
-                cleanup_servo()
 
             
 
@@ -255,4 +254,7 @@ if source_type == 'video' or source_type == 'usb':
 elif source_type == 'picamera':
     cap.stop()
 if record: recorder.release()
+
+cleanup_servo()
+
 cv2.destroyAllWindows()
