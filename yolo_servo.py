@@ -1,6 +1,20 @@
 import time
 import atexit
 
+try:
+    from yolo_audio import (
+        play_sound,
+        snd_b3,
+        snd_organic,
+        snd_non,
+        snd_fail
+    )
+    AUDIO_AVAILABLE = True
+    print("STATUS: Audio module terhubung.")
+except Exception as e:
+    print(f"WARNING: Audio tidak tersedia: {e}")
+    AUDIO_AVAILABLE = False
+
 # ========== KONFIGURASI GPIO ==========
 GPIO_AVAILABLE = False
 try:
@@ -135,6 +149,8 @@ def jalankan_servo(jenis_sampah):
 
         # === B3 ===
         if jenis_sampah == 'b3':
+            if AUDIO_AVAILABLE:
+                play_sound(snd_b3)
             print("=== SAMPAH B3 TERDETEKSI ===")
             print("Servo1 sudah di posisi default (B3), tidak bergerak.")
             servo2_buka_tutup()
@@ -142,6 +158,8 @@ def jalankan_servo(jenis_sampah):
 
         # === ORGANIC ===
         elif jenis_sampah == 'organic':
+            if AUDIO_AVAILABLE:
+                play_sound(snd_organic)
             print("=== SAMPAH ORGANIK TERDETEKSI ===")
             print("1. Memutar bin ke KANAN (organic)...")
             servo1_goto(DUTY_ORG)
@@ -155,6 +173,8 @@ def jalankan_servo(jenis_sampah):
 
         # === NON-ORGANIC ===
         elif jenis_sampah == 'non-organic':
+            if AUDIO_AVAILABLE:
+                play_sound(snd_non)
             print("=== SAMPAH NON-ORGANIC TERDETEKSI ===")
             print("1. Memutar bin ke KIRI (non-organic)...")
             servo1_goto(DUTY_NON)
@@ -167,6 +187,8 @@ def jalankan_servo(jenis_sampah):
             print("=== SELESAI ===\n")
 
         else:
+            if AUDIO_AVAILABLE:
+                play_sound(snd_fail)
             print(f"Jenis sampah tidak dikenali: {jenis_sampah}")
 
     finally:
