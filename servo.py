@@ -110,13 +110,32 @@ if (not os.path.exists(model_path)):
 
 # Load the model into memory and get labemap
 print(f"STATUS: Memuat model YOLO dari {model_path}...")
+print(f"STATUS: Checking available memory...")
+try:
+    import psutil
+    mem_info = psutil.virtual_memory()
+    print(f"STATUS: RAM Available: {mem_info.available / (1024**3):.2f} GB / {mem_info.total / (1024**3):.2f} GB")
+    if mem_info.available < 1.5 * (1024**3):  # Kurang dari 1.5GB
+        print("WARNING: RAM tersisa kurang dari 1.5GB. Model YOLO mungkin kesulitan dimuat.")
+except ImportError:
+    print("STATUS: psutil not available, skipping memory check")
+except Exception as e:
+    print(f"WARNING: Memory check failed: {e}")
+
 try:
     # Baris ini SANGAT KRITIS dan bisa menyebabkan Segmentation Fault/Memory Crash
-    model = YOLO(model_path, task='detect') 
+    print("STATUS: Loading YOLO model... (this may take 30-60 seconds on Pi 4)")
+    model = YOLO(model_path, task='detect', verbose=True)
     labels = model.names
-    print("STATUS: Model YOLO berhasil dimuat.")
+    print(f"STATUS: Model YOLO berhasil dimuat. Classes: {list(labels.values())}")
+except MemoryError as e:
+    print(f"FATAL ERROR: Tidak cukup RAM untuk memuat model: {e}")
+    print("SOLUSI: Gunakan model yang lebih kecil (YOLOv8n) atau tambah swap memory")
+    sys.exit(1)
 except Exception as e:
-    print(f"FATAL ERROR: Gagal memuat model YOLO. Ini bisa jadi sumber SegFault: {e}")
+    print(f"FATAL ERROR: Gagal memuat model YOLO: {type(e).__name__}: {e}")
+    import traceback
+    traceback.print_exc()
     sys.exit(1)
 
 # Optimize model for inference speed
@@ -368,33 +387,62 @@ elif source_type == 'video' or source_type == 'usb':
 
     if source_type == 'video': cap_arg = img_source
     elif source_type == 'usb': cap_arg = usb_idx
-    
+
     # Baris ini SANGAT KRITIS dan bisa menyebabkan SegFault/Crash
     print(f"STATUS: Mencoba membuka kamera/video: {cap_arg}")
-    
+
     # --- REVISI: Pengecekan dan setting resolusi yang lebih baik ---
-    cap = cv2.VideoCapture(cap_arg)
-    
-    if not cap.isOpened():
-        print(f"FATAL ERROR: Gagal membuka kamera/video pada argumen: {cap_arg}. Pastikan perangkat tersedia dan indeks kamera USB sudah benar.")
+    try:
+        # Tambahkan backend explicit untuk stabilitas di Pi
+        # CAP_V4L2 lebih stabil untuk USB camera di Linux/Pi
+        if source_type == 'usb':
+            cap = cv2.VideoCapture(cap_arg, cv2.CAP_V4L2)
+            print("STATUS: Menggunakan V4L2 backend untuk USB camera")
+        else:
+            cap = cv2.VideoCapture(cap_arg)
+    except Exception as e:
+        print(f"FATAL ERROR: Exception saat membuka kamera: {e}")
         sys.exit(1)
-        
+
+    if not cap.isOpened():
+        print(f"FATAL ERROR: Gagal membuka kamera/video pada argumen: {cap_arg}")
+        print("DEBUG: Pastikan:")
+        print("  1. Kamera terhubung (coba: ls /dev/video*)")
+        print("  2. User ada di grup 'video' (coba: groups)")
+        print("  3. Tidak ada aplikasi lain menggunakan kamera")
+        sys.exit(1)
+
+    # Test baca frame pertama untuk memastikan kamera bekerja
+    print("STATUS: Testing camera dengan membaca 1 frame...")
+    test_ret, test_frame = cap.read()
+    if not test_ret or test_frame is None:
+        print("FATAL ERROR: Kamera terbuka tapi gagal membaca frame!")
+        print("DEBUG: Ini bisa terjadi karena:")
+        print("  1. Driver kamera bermasalah")
+        print("  2. Kamera tidak mendapat cukup daya (gunakan powered USB hub)")
+        print("  3. Kabel USB rusak")
+        cap.release()
+        sys.exit(1)
+    print(f"STATUS: Frame test berhasil dibaca! Shape: {test_frame.shape}")
+
     # Set camera or video resolution if specified by user
     if user_res:
         print(f"STATUS: Mencoba mengatur resolusi ke {resW}x{resH}...")
-        
+
         # Set resolusi
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, resW)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, resH)
-        
+
         # VERIFIKASI RESOLUSI: Cek apakah setting resolusi berhasil
         actual_w = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
         actual_h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-        
+
         if actual_w != resW or actual_h != resH:
             print(f"WARNING: Gagal mengatur resolusi ke {resW}x{resH}. Resolusi aktual: {actual_w:.0f}x{actual_h:.0f}")
-            # Nonaktifkan resize jika resolusi aktual tidak sama
-            resize = False 
+            # Update resW dan resH ke nilai aktual
+            resW = int(actual_w)
+            resH = int(actual_h)
+            print(f"STATUS: Menggunakan resolusi aktual: {resW}x{resH}")
         else:
             print(f"STATUS: Resolusi berhasil diatur ke {resW}x{resH}.")
     # --- AKHIR REVISI ---
@@ -421,6 +469,17 @@ frame_count = 0
 skip_frames = 2  # Process every N frames (1 = every frame, 2 = every other frame)
 
 print("STATUS: Memulai loop inference...")
+print("=" * 60)
+print("KONTROL:")
+print("  Q - Quit (keluar)")
+print("  S - Pause (jeda)")
+print("  P - Capture screenshot")
+print("=" * 60)
+
+# Tambahkan error counter untuk recovery
+consecutive_errors = 0
+max_consecutive_errors = 10
+
 # Begin inference loop
 while True:
 
@@ -428,35 +487,58 @@ while True:
     current_time = time.perf_counter()
 
     # Load frame from image source
-    if source_type == 'image' or source_type == 'folder':
-        if img_count >= len(imgs_list):
-            print('All images have been processed. Exiting program.')
-            sys.exit(0)
-        img_filename = imgs_list[img_count]
-        frame = cv2.imread(img_filename)
-        img_count = img_count + 1
-        
-    elif source_type == 'video':
-        ret, frame = cap.read()
-        if ret == False:
-            print('Reached end of the video file. Exiting program.')
-            break
+    try:
+        if source_type == 'image' or source_type == 'folder':
+            if img_count >= len(imgs_list):
+                print('All images have been processed. Exiting program.')
+                sys.exit(0)
+            img_filename = imgs_list[img_count]
+            frame = cv2.imread(img_filename)
+            img_count = img_count + 1
 
-    elif source_type == 'usb': # If source is a USB camera, grab frame from camera
-        ret, frame = cap.read()
-        # JEDA I/O JANGKA PENDEK UNTUK STABILITAS
-        time.sleep(0.005) 
-        
-        if (frame is None) or (ret == False):
-            print('CRITICAL: Gagal membaca frame dari kamera. Mungkin terputus atau gagal diinisialisasi.')
-            break
+        elif source_type == 'video':
+            ret, frame = cap.read()
+            if ret == False:
+                print('Reached end of the video file. Exiting program.')
+                break
 
-    elif source_type == 'picamera': # If source is a Picamera, grab frames using picamera interface
-        frame_bgra = cap.capture_array()
-        frame = cv2.cvtColor(np.copy(frame_bgra), cv2.COLOR_BGRA2BGR)
-        if (frame is None):
-            print('Unable to read frames from the Picamera. This indicates the camera is disconnected or not working. Exiting program.')
+        elif source_type == 'usb': # If source is a USB camera, grab frame from camera
+            ret, frame = cap.read()
+            # JEDA I/O JANGKA PENDEK UNTUK STABILITAS
+            time.sleep(0.005)
+
+            if (frame is None) or (ret == False):
+                consecutive_errors += 1
+                print(f'WARNING: Gagal membaca frame ({consecutive_errors}/{max_consecutive_errors})')
+
+                if consecutive_errors >= max_consecutive_errors:
+                    print('CRITICAL: Terlalu banyak error berturut-turut. Kamera mungkin terputus.')
+                    break
+
+                # Skip frame ini dan coba lagi
+                time.sleep(0.1)
+                continue
+            else:
+                # Reset error counter jika berhasil
+                if consecutive_errors > 0:
+                    print(f"STATUS: Kamera pulih setelah {consecutive_errors} error")
+                    consecutive_errors = 0
+
+        elif source_type == 'picamera': # If source is a Picamera, grab frames using picamera interface
+            frame_bgra = cap.capture_array()
+            frame = cv2.cvtColor(np.copy(frame_bgra), cv2.COLOR_BGRA2BGR)
+            if (frame is None):
+                print('Unable to read frames from the Picamera. This indicates the camera is disconnected or not working. Exiting program.')
+                break
+
+    except Exception as e:
+        print(f"ERROR saat membaca frame: {e}")
+        consecutive_errors += 1
+        if consecutive_errors >= max_consecutive_errors:
+            print('CRITICAL: Terlalu banyak error. Keluar dari loop.')
             break
+        time.sleep(0.1)
+        continue
 
     # Resize frame to desired display resolution
     if resize == True:
