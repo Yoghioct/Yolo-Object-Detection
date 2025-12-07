@@ -59,6 +59,10 @@ SOUND_ORGANIC = 'organic.mp3'
 SOUND_NON_ORGANIC = 'non-organic.mp3'
 SOUND_FAIL = 'waste-cant-detect.mp3'
 
+count_b3 = 0
+count_organic = 0
+count_non_organic = 0
+
 # Initialize hardware if available
 if GPIO_AVAILABLE:
     try:
@@ -191,6 +195,9 @@ def jalankan_servo(jenis_sampah):
             print("Servo1 sudah di posisi default (B3), tidak bergerak.")
             servo2_buka_tutup()
             print("=== SELESAI ===\n")
+            count_b3 = count_b3 + 1
+
+            print("count_b3: ",count_b3)
 
         # === ORGANIC ===
         elif jenis_sampah == 'organic':
@@ -205,6 +212,10 @@ def jalankan_servo(jenis_sampah):
             print("3. Kembali ke B3...")
             servo1_goto(BACK_ORG)
             print("=== SELESAI ===\n")
+            count_organic = count_organic + 1
+
+            print(count_organic)
+            print("count_organic: ",count_organic)
 
         # === NON-ORGANIC ===
         elif jenis_sampah == 'non-organic':
@@ -219,6 +230,10 @@ def jalankan_servo(jenis_sampah):
             print("3. Kembali ke B3...")
             servo1_goto(BACK_NON)
             print("=== SELESAI ===\n")
+            count_non_organic = count_non_organic + 1
+
+            print(count_non_organic)
+            print("count_non_organic: ",count_non_organic)
 
         else:
             print(f"Jenis sampah tidak dikenali: {jenis_sampah}")

@@ -4,6 +4,7 @@ import argparse
 import glob
 import time
 import atexit
+import threading
 
 import cv2
 import numpy as np
@@ -35,6 +36,10 @@ img_source = args.source
 min_thresh = args.thresh
 user_res = args.resolution
 record = args.record
+
+# async servo
+def servo_async(label):
+    Thread(target=jalankan_servo, args=(label,), daemon=True).start()
 
 # Check if model file exists and is valid
 if (not os.path.exists(model_path)):
@@ -177,12 +182,15 @@ try:
                 print('Unable to read frames from the Picamera. This indicates the camera is disconnected or not working. Exiting program.')
                 break
 
+        small_frame = cv2.resize(frame, (416, 416))
+
         # Resize frame to desired display resolution
         if resize == True and frame is not None:
             frame = cv2.resize(frame,(resW,resH))
 
         # Run inference on frame
-        results = model(frame, verbose=False)
+        # results = model(frame, imgsz=320, verbose=False)
+        results = model(small_frame, imgsz=320, verbose=False)
 
         # Extract results
         detections = results[0].boxes
@@ -223,7 +231,7 @@ try:
                 # Jalankan servo untuk kategori yang valid (no cleanup here)
                 if classname in ['non-organic', 'organic', 'b3']:
                     try:
-                        jalankan_servo(classname)
+                        servo_async(classname)
                     except Exception as e:
                         print("Servo runtime error (caught):", e)
 
