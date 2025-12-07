@@ -1,97 +1,69 @@
 import time
 import atexit
 
-# ... existing constants ...
 
-# initialize servo variables even if GPIO not available
+# ========== KONFIGURASI GPIO ==========
+GPIO_AVAILABLE = False
+try:
+import RPi.GPIO as GPIO
+GPIO_AVAILABLE = True
+# print("STATUS: RPi.GPIO berhasil dimuat.")
+except Exception:
+# If import fails we run in simulation mode
+GPIO_AVAILABLE = False
+
+
+# ========== PIN CONFIGURATION ==========
+SERVO_BIN_PIN = 11 # Servo 1 (Pembagi Kategori) - BOARD PIN 11
+SERVO_LID_PIN = 13 # Servo 2 (Pembuka/Penutup) - BOARD PIN 13
+
+
+# ========== DUTY CYCLE HASIL KALIBRASI ==========
+DUTY_ORG = 5.0 # Organic (kanan)
+DUTY_NON = 9.53 # Non-organic (kiri)
+DUTY_B3 = 7.0 # Posisi default (B3)
+BACK_ORG = 9.5 # Balik ke B3 dari Organic
+BACK_NON = 4.1 # Balik ke B3 dari Non-organic
+
+
+# ========== SERVO 2 (TUTUP) DUTY CYCLE ==========
+DUTY_TUTUP_TERTUTUP = 2.5 # Tutup ditutup
+DUTY_TUTUP_TENGAH = 7.5 # Posisi tengah
+DUTY_TUTUP_TERBUKA = 11.5 # Tutup dibuka
+
+
+# ========== WAKTU GERAKAN ==========
+WAKTU_ROTASI = 1.0 # Waktu rotasi bin (detik)
+WAKTU_BUKA_TUTUP = 3.5 # Waktu tunggu tutup terbuka (detik)
+
+
+# ========== STATUS ==========
+servo_sedang_jalan = False
+_gpio_cleaned = False
+
+
+# servo pwm object placeholders
 servo_bin = None
 servo_tutup = None
 
+
+# Initialize hardware if available
 if GPIO_AVAILABLE:
-    GPIO.setwarnings(False)
-    GPIO.cleanup()
-    GPIO.setmode(GPIO.BOARD)
-    GPIO.setup(SERVO_BIN_PIN, GPIO.OUT)
-    GPIO.setup(SERVO_LID_PIN, GPIO.OUT)
-
-    servo_bin = GPIO.PWM(SERVO_BIN_PIN, 50)
-    servo_tutup = GPIO.PWM(SERVO_LID_PIN, 50)
-
-    servo_bin.start(0)
-    servo_tutup.start(0)
+try:
+GPIO.setwarnings(False)
+# ensure clean start
+GPIO.cleanup()
+GPIO.setmode(GPIO.BOARD)
+GPIO.setup(SERVO_BIN_PIN, GPIO.OUT)
+GPIO.setup(SERVO_LID_PIN, GPIO.OUT)
 
 
-def pwm_safe_change(pwm_obj, duty, sleep_after):
-    """Call ChangeDutyCycle safely if pwm_obj exists."""
-    try:
-        if GPIO_AVAILABLE and pwm_obj is not None:
-            pwm_obj.ChangeDutyCycle(duty)
-            time.sleep(sleep_after)
-            pwm_obj.ChangeDutyCycle(0)
-            time.sleep(0.05)
-        else:
-            # simulation mode
-            print(f"[SIMULASI] PWM change to {duty} (sleep {sleep_after}s)")
-            time.sleep(sleep_after)
-    except Exception as e:
-        print(f"[ERROR] PWM operation failed: {e}")
+servo_bin = GPIO.PWM(SERVO_BIN_PIN, 50)
+servo_tutup = GPIO.PWM(SERVO_LID_PIN, 50)
 
 
-def servo1_goto(duty):
-    """Menggerakkan Servo1 (Bin) ke duty cycle tertentu."""
-    pwm_safe_change(servo_bin, duty, WAKTU_ROTASI)
-
-
-def servo2_buka_tutup():
-    print("Servo 2 mulai buka/tutup...")
-    if GPIO_AVAILABLE and servo_tutup is None:
-        print("[WARNING] servo_tutup is None despite GPIO_AVAILABLE=True")
-    # 1. Tutup
-    pwm_safe_change(servo_tutup, DUTY_TUTUP_TERTUTUP, 0.7)
-    # 2. Tengah (we don't zero immediately to allow movement)
-    try:
-        if GPIO_AVAILABLE and servo_tutup is not None:
-            servo_tutup.ChangeDutyCycle(DUTY_TUTUP_TENGAH)
-            time.sleep(0.5)
-            servo_tutup.ChangeDutyCycle(0)
-    except Exception as e:
-        print(f"[ERROR] servo_tutup middle move failed: {e}")
-
-    # 3. wait
-    print(f"Menunggu selama {WAKTU_BUKA_TUTUP} detik...")
-    time.sleep(WAKTU_BUKA_TUTUP)
-
-    # 4. Buka
-    pwm_safe_change(servo_tutup, DUTY_TUTUP_TERBUKA, 0.8)
-    print("Servo 2 selesai.")
-
-
-def cleanup_servo():
-    """Membersihkan GPIO saat program selesai. Safe to call multiple times."""
-    global servo_bin, servo_tutup
-    if GPIO_AVAILABLE:
-        try:
-            print("Membersihkan GPIO...")
-            # Stop PWM only if objects exist
-            if servo_bin is not None:
-                try:
-                    servo_bin.stop()
-                except Exception as e:
-                    print(f"Error stopping servo_bin: {e}")
-                servo_bin = None
-            if servo_tutup is not None:
-                try:
-                    servo_tutup.stop()
-                except Exception as e:
-                    print(f"Error stopping servo_tutup: {e}")
-                servo_tutup = None
-
-            GPIO.cleanup()
-            print("GPIO dibersihkan!")
-        except Exception as e:
-            print("cleanup_servo error:", e)
-    else:
-        print("GPIO cleanup (mode simulasi)")
-
-# Register cleanup on normal program exit
-atexit.register(cleanup_servo)
+servo_bin.start(0)
+servo_tutup.start(0)
+except Exception as e:
+# fallback to simulation mode if init fails
+init_servo()
