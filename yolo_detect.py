@@ -120,9 +120,13 @@ elif source_type == 'folder':
             imgs_list.append(file)
 elif source_type == 'video' or source_type == 'usb':
 
-    if source_type == 'video': cap_arg = img_source
-    elif source_type == 'usb': cap_arg = usb_idx
-    cap = cv2.VideoCapture(cap_arg)
+    if source_type == 'video':
+        cap_arg = img_source
+        cap = cv2.VideoCapture(cap_arg)
+    elif source_type == 'usb':
+        cap_arg = usb_idx
+        # Use V4L2 backend for USB camera to avoid GStreamer issues
+        cap = cv2.VideoCapture(cap_arg, cv2.CAP_V4L2)
 
     # Set camera or video resolution if specified by user
     if user_res:
