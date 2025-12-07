@@ -8,6 +8,8 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
+from yolo_servo import servo1_goto, servo2_buka_tutup
+
 # Define and parse user input arguments
 
 parser = argparse.ArgumentParser()
@@ -201,6 +203,25 @@ while True:
 
             # Basic example: count the number of objects in the image
             object_count = object_count + 1
+
+            if classname == 'b3':
+                print("=== B3 ===")
+                print("Servo1 sudah di posisi default (B3), tidak bergerak lagi.")
+                servo2_buka_tutup()
+
+            elif classname == 'nonorganic':
+                print("=== NON-ORGANIC (KIRI) ===")
+                servo1_goto(DUTY_NON)
+                servo2_buka_tutup()
+                print("Kembali ke B3...")
+                servo1_goto(BACK_NON)
+
+            elif classname == 'prganic':
+                print("=== ORGANIC (KANAN) ===")
+                servo1_goto(DUTY_ORG)
+                servo2_buka_tutup()
+                print("Kembali ke B3...")
+                servo1_goto(BACK_ORG)
 
     # Calculate and draw framerate (if using video, USB, or Picamera source)
     if source_type == 'video' or source_type == 'usb' or source_type == 'picamera':
